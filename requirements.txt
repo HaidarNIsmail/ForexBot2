@@ -1,0 +1,12 @@
+pandas
+numpy
+ta
+textblob
+matplotlib
+gym
+stable-baselines3
+MetaTrader5
+python-dotenv
+optuna
+flake8
+pytest
