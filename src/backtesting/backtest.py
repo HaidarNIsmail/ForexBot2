@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-from src.strategies.xmode import xmode_strategy
+
 
 def backtest_strategy(df, initial_capital=10000.0):
     # basic backtest
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     try:
         data = pd.read_csv(data_path, index_col='time')
         # 1) Run the xmode logic
-        from src.strategies.xmode import xmode_strategy
+        from src.indicators.xmode import xmode_strategy
         df_xmode = xmode_strategy(data)
 
         # 2) Backtest
