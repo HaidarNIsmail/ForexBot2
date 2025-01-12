@@ -1,0 +1,1 @@
+time,Open,High,Low,Close,Volume,Spread,RealVolume,EMA_50,EMA_200,RSI,MACD,MACD_Signal,MACD_Histogram,BB_High,BB_Low,BB_Middle,ATR,Ichimoku_Conversion,Ichimoku_Base,Ichimoku_A,Ichimoku_B,Chikou_Span,Stochastic_RSI,ADX,MAW,M_cur,F_cur,M_1,F_1,M_1x,F_1x,tradeAction,RTD_Signal,vLow,vHigh,vDist,shift,xmode_zone,dummy_col,Signal,Positions

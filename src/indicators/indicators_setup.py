@@ -23,7 +23,10 @@ def calculate_technical_indicators(df, news_headlines=None):
         required_columns = {'Open', 'High', 'Low', 'Close', 'Volume'}
         missing_columns = required_columns.difference(df.columns)
         if missing_columns:
-            raise KeyError(f"Missing columns in DataFrame: {', '.join(missing_columns)}")
+            print(f"KeyError: Missing columns in DataFrame: {', '.join(missing_columns)}")
+            for col in missing_columns:
+                df[col] = 0.0  # Adding default values for missing columns
+            print(f"Added missing columns with default values: {', '.join(missing_columns)}")
 
         # EMA Calculation
         print("Calculating EMAs...")
@@ -36,9 +39,9 @@ def calculate_technical_indicators(df, news_headlines=None):
 
         # MACD
         print("Calculating MACD...")
-        df['MACD'] = ta.trend.macd(close=df['Close'], window_slow=26, window_fast=12, window_sign=9)
-        df['MACD_Signal'] = ta.trend.macd_signal(close=df['Close'], window_slow=26, window_fast=12, window_sign=9)
-        df['MACD_Histogram'] = ta.trend.macd_diff(close=df['Close'], window_slow=26, window_fast=12, window_sign=9)
+        df['MACD'] = ta.trend.macd(close=df['Close'], window_slow=26, window_fast=12)
+        df['MACD_Signal'] = ta.trend.macd_signal(close=df['Close'], window_slow=26, window_fast=12)
+        df['MACD_Histogram'] = ta.trend.macd_diff(close=df['Close'], window_slow=26, window_fast=12)
 
         # Bollinger Bands
         print("Calculating Bollinger Bands...")
@@ -83,11 +86,8 @@ def calculate_technical_indicators(df, news_headlines=None):
             if sentiments is not None:
                 df['Sentiment'] = sentiments
 
-    except KeyError as e:
-        print(f"KeyError: {e}")
-        return None
     except Exception as e:
-        print(f"An unexpected error occurred during technical indicator calculation: {e}")
+        print(f"An error occurred during technical indicator calculation: {e}")
         return None
 
     # Drop any rows with NaN values resulting from indicator calculations
@@ -120,3 +120,5 @@ if __name__ == "__main__":
         print(f"Error: Could not find the data file at: {full_data_path}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
+

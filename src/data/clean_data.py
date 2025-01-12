@@ -1,54 +1,25 @@
 import pandas as pd
-import os
-from Config.config import Config
 
-def clean_data(df):
-    # Rename columns for convenience
-    df.rename(columns={
-        'open': 'Open',
-        'high': 'High',
-        'low': 'Low',
-        'close': 'Close',
-        'tick_volume': 'Volume',
-        'real_volume': 'Real_Volume'
-    }, inplace=True)
+# Path to the CSV file
+file_path = 'C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_indicators.csv'
 
-    # Convert relevant columns to numeric
-    for col in ['Open', 'High', 'Low', 'Close', 'Volume', 'Real_Volume']:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
+# Load the CSV file
+df = pd.read_csv(file_path)
 
-    # Convert index to DateTimeIndex
-    df.index = pd.to_datetime(df.index)
+# Interpolate missing values
+columns_to_interpolate = [
+    'EMA_50', 'EMA_200', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Histogram',
+    'BB_High', 'BB_Low', 'BB_Middle', 'ATR', 'Ichimoku_Conversion',
+    'Ichimoku_Base', 'Ichimoku_A', 'Ichimoku_B', 'Chikou_Span',
+    'Stochastic_RSI', 'ADX'
+]
 
-    # Remove rows with zero volume (optional)
-    df = df[df['Volume'] != 0]
+for col in columns_to_interpolate:
+    df[col] = df[col].replace(0, pd.NA).interpolate(method='linear')
 
-    # Drop any rows with missing values
-    df.dropna(inplace=True)
+# Save the cleaned data
+output_path = 'C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_indicators_cleaned.csv'
+df.to_csv(output_path, index=False)
 
-    return df
+print(f"Cleaned data saved to: {output_path}")
 
-if __name__ == "__main__":
-    try:
-        # Build the full/absolute path to the CSV file
-        full_data_path = os.path.join(
-            os.path.dirname(__file__),
-            '..',
-            '..',
-            Config.DATA_PATH
-        )
-
-        # Read the raw CSV data
-        df = pd.read_csv(full_data_path, index_col='time')
-
-        # Clean the data
-        cleaned_df = clean_data(df)
-
-        # Save the cleaned data back to CSV
-        cleaned_df.to_csv(full_data_path, index=True)
-        print(f"Cleaned data saved to: {full_data_path}")
-
-    except FileNotFoundError:
-        print(f"Error. Could not find the data file at: {full_data_path}")
-    except Exception as e:
-        print(f"An unexpected error occurred during data cleaning: {e}")
