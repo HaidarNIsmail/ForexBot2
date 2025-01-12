@@ -1,40 +1,46 @@
 import pandas as pd
+from itertools import product
 
-def run_backtest(df):
-    # Simplified backtest function
-    df['Strategy_Returns'] = df['Buy_Signal'] * (df['Close'].pct_change()) - df['Sell_Signal'] * (df['Close'].pct_change())
-    total_return = (df['Strategy_Returns'] + 1).prod() - 1
-    sharpe_ratio = df['Strategy_Returns'].mean() / df['Strategy_Returns'].std() * (252 ** 0.5)
-    return total_return, sharpe_ratio
+# Load data
+data_path = "C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_indicators.csv"
+df = pd.read_csv(data_path, index_col="time", parse_dates=True)
 
-if __name__ == "__main__":
-    # Load data
-    df = pd.read_csv('C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_signals.csv')
-
-    # Define parameter grid
-    param_grid = {
-        'stop_loss_pct': [0.005, 0.01, 0.015],
-        'take_profit_pct': [0.01, 0.02, 0.03],
-        'adx_threshold': [20, 25, 30],
-    }
-
-    best_sharpe = float('-inf')
+# Optimization Function
+def optimize_parameters(df, ema_short_values, ema_long_values, rsi_values):
     best_params = None
+    best_return = float('-inf')
 
-    for sl_pct in param_grid['stop_loss_pct']:
-        for tp_pct in param_grid['take_profit_pct']:
-            for adx_thr in param_grid['adx_threshold']:
-                # Update parameters
-                df['Stop_Loss'] = df['Close'] * (1 - sl_pct)
-                df['Take_Profit'] = df['Close'] * (1 + tp_pct)
-                df['ADX_Threshold'] = adx_thr
+    for ema_short, ema_long, rsi_threshold in product(ema_short_values, ema_long_values, rsi_values):
+        # Generate Signals
+        df['EMA_Short'] = df['Close'].ewm(span=ema_short).mean()
+        df['EMA_Long'] = df['Close'].ewm(span=ema_long).mean()
+        df['RSI'] = (df['Close'] - df['Close'].shift(1)).cumsum()  # Simplified RSI for testing
 
-                # Run backtest
-                total_return, sharpe_ratio = run_backtest(df)
+        df['Buy_Signal'] = (df['EMA_Short'] > df['EMA_Long']) & (df['RSI'] < rsi_threshold)
+        df['Sell_Signal'] = (df['EMA_Short'] < df['EMA_Long']) & (df['RSI'] > 100 - rsi_threshold)
 
-                if sharpe_ratio > best_sharpe:
-                    best_sharpe = sharpe_ratio
-                    best_params = {'stop_loss_pct': sl_pct, 'take_profit_pct': tp_pct, 'adx_threshold': adx_thr}
+        # Backtest Strategy
+        df['Equity'] = 10000  # Reset balance
+        for index, row in df.iterrows():
+            if row['Buy_Signal']:
+                df.at[index, 'Equity'] += 10  # Simplified trading logic
+            elif row['Sell_Signal']:
+                df.at[index, 'Equity'] -= 10
 
-    print(f"Best Sharpe Ratio: {best_sharpe}")
-    print(f"Best Parameters: {best_params}")
+        # Calculate Return
+        total_return = df['Equity'].iloc[-1]
+        if total_return > best_return:
+            best_return = total_return
+            best_params = (ema_short, ema_long, rsi_threshold)
+
+    print(f"Best Parameters: EMA Short = {best_params[0]}, EMA Long = {best_params[1]}, RSI Threshold = {best_params[2]}")
+    return best_params
+
+# Define Parameter Ranges
+ema_short_values = range(5, 20, 5)
+ema_long_values = range(20, 50, 10)
+rsi_values = range(30, 50, 10)
+
+# Run Optimization
+optimize_parameters(df, ema_short_values, ema_long_values, rsi_values)
+

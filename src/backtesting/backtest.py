@@ -1,71 +1,48 @@
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 
+# Backtesting Function
 def backtest_strategy(df, initial_balance=10000):
     balance = initial_balance
-    equity_curve = []
-    position = 0  # 1 for long, -1 for short, 0 for no position
+    position_size = 0
+    df['Equity'] = balance
 
-    for idx, row in df.iterrows():
-        if row['Buy_Signal']:
-            position = 1
+    for index, row in df.iterrows():
+        if row['Buy_Signal'] and position_size == 0:
             entry_price = row['Close']
+            stop_loss = row['Stop_Loss']
+            take_profit = row['Take_Profit']
+            position_size = balance / entry_price
+            print(f"Opened Buy at {index}: Entry = {entry_price}")
 
-        elif row['Sell_Signal']:
-            position = -1
-            entry_price = row['Close']
+        elif row['Sell_Signal'] and position_size > 0:
+            exit_price = row['Close']
+            balance += position_size * (exit_price - entry_price)
+            position_size = 0
+            print(f"Closed Position at {index}: Exit = {exit_price}")
 
-        # Stop Loss and Take Profit
-        if position == 1 and row['Low'] < row['Stop_Loss']:
-            balance += (row['Stop_Loss'] - entry_price) * position
-            position = 0
+        df.at[index, 'Equity'] = balance + (position_size * row['Close'] if position_size > 0 else 0)
 
-        elif position == -1 and row['High'] > row['Take_Profit']:
-            balance += (entry_price - row['Take_Profit']) * abs(position)
-            position = 0
-
-        # Update equity curve
-        equity_curve.append(balance)
-
-    df['Strategy_Equity'] = equity_curve
     return df
 
-if __name__ == "__main__":
-    data_path = "C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_signals.csv"
-    output_path = "C:/Users/haida/PycharmProjects/ForexBot2/data/backtest_results.csv"
+# Run Backtest
+df = pd.read_csv("C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_signals.csv", index_col="time", parse_dates=True)
+df = backtest_strategy(df)
 
-    df = pd.read_csv(data_path, index_col='time', parse_dates=True)
+# Plot Equity Curve
+plt.figure(figsize=(10, 6))
+plt.plot(df.index, df['Equity'], label="Equity Curve")
+plt.title("Strategy Backtest")
+plt.legend()
+plt.grid()
+plt.show()
 
-    # Ensure required columns are present
-    required_columns = ['Stop_Loss', 'Take_Profit', 'Buy_Signal', 'Sell_Signal']
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    if missing_columns:
-        raise ValueError(f"Missing columns: {missing_columns}")
+# Save Results
+output_path = "C:/Users/haida/PycharmProjects/ForexBot2/data/backtest_results.csv"
+df.to_csv(output_path)
+print(f"Backtest results saved to: {output_path}")
 
-    # Backtest strategy
-    df = backtest_strategy(df)
 
-    # Calculate performance metrics
-    df['Strategy_Returns'] = df['Strategy_Equity'].pct_change().fillna(0)
-    total_return = (df['Strategy_Equity'].iloc[-1] - df['Strategy_Equity'].iloc[0]) / df['Strategy_Equity'].iloc[0] * 100
-    sharpe_ratio = df['Strategy_Returns'].mean() / df['Strategy_Returns'].std() * np.sqrt(252)
-    max_drawdown = ((df['Strategy_Equity'].cummax() - df['Strategy_Equity']) / df['Strategy_Equity'].cummax()).max() * 100
-
-    print(f"Total Return: {total_return:.2f}%")
-    print(f"Sharpe Ratio: {sharpe_ratio:.2f}")
-    print(f"Max Drawdown: {max_drawdown:.2f}%")
-
-    # Save results
-    df.to_csv(output_path)
-    print(f"Backtest results saved to: {output_path}")
-
-    # Plot equity curve
-    plt.figure(figsize=(10, 6))
-    plt.plot(df.index, df['Strategy_Equity'], label='Strategy Equity Curve')
-    plt.title('Strategy Backtest')
-    plt.legend()
-    plt.show()
 
 
 
