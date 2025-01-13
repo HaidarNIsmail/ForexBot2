@@ -1,46 +1,75 @@
 import pandas as pd
-from itertools import product
+import numpy as np
+from scipy.optimize import minimize
+from src.indicators.indicators_setup import calculate_ema, calculate_rsi, calculate_macd
 
-# Load data
-data_path = "C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_indicators.csv"
-df = pd.read_csv(data_path, index_col="time", parse_dates=True)
+def objective_function(params, *args):
+    """
+    Objective function to minimize for parameter optimization.
+    """
+    data = args[0]
+    short_ema, long_ema, rsi_period, macd_short, macd_long, macd_signal = params
 
-# Optimization Function
-def optimize_parameters(df, ema_short_values, ema_long_values, rsi_values):
-    best_params = None
-    best_return = float('-inf')
+    # Calculate EMA
+    data['EMA_Short'] = calculate_ema(data, 'Close', span=int(short_ema))
+    data['EMA_Long'] = calculate_ema(data, 'Close', span=int(long_ema))
 
-    for ema_short, ema_long, rsi_threshold in product(ema_short_values, ema_long_values, rsi_values):
-        # Generate Signals
-        df['EMA_Short'] = df['Close'].ewm(span=ema_short).mean()
-        df['EMA_Long'] = df['Close'].ewm(span=ema_long).mean()
-        df['RSI'] = (df['Close'] - df['Close'].shift(1)).cumsum()  # Simplified RSI for testing
+    # Calculate RSI
+    data['RSI'] = calculate_rsi(data, 'Close', period=int(rsi_period))
 
-        df['Buy_Signal'] = (df['EMA_Short'] > df['EMA_Long']) & (df['RSI'] < rsi_threshold)
-        df['Sell_Signal'] = (df['EMA_Short'] < df['EMA_Long']) & (df['RSI'] > 100 - rsi_threshold)
+    # Calculate MACD
+    data['MACD'], data['Signal_Line'] = calculate_macd(
+        data, 'Close', short_span=int(macd_short), long_span=int(macd_long), signal_span=int(macd_signal)
+    )
 
-        # Backtest Strategy
-        df['Equity'] = 10000  # Reset balance
-        for index, row in df.iterrows():
-            if row['Buy_Signal']:
-                df.at[index, 'Equity'] += 10  # Simplified trading logic
-            elif row['Sell_Signal']:
-                df.at[index, 'Equity'] -= 10
+    # Example trading strategy
+    data['Signal'] = np.where((data['Close'] > data['EMA_Short']) &
+                              (data['RSI'] > 50) &
+                              (data['MACD'] > data['Signal_Line']), 1, -1)
 
-        # Calculate Return
-        total_return = df['Equity'].iloc[-1]
-        if total_return > best_return:
-            best_return = total_return
-            best_params = (ema_short, ema_long, rsi_threshold)
+    # Simulate returns
+    data['Strategy_Return'] = data['Signal'].shift(1) * data['Close'].pct_change()
 
-    print(f"Best Parameters: EMA Short = {best_params[0]}, EMA Long = {best_params[1]}, RSI Threshold = {best_params[2]}")
-    return best_params
+    # Calculate negative Sharpe ratio as the objective
+    mean_return = data['Strategy_Return'].mean()
+    std_return = data['Strategy_Return'].std()
+    if std_return == 0:
+        return np.inf  # Avoid division by zero
+    sharpe_ratio = mean_return / std_return
+    return -sharpe_ratio
 
-# Define Parameter Ranges
-ema_short_values = range(5, 20, 5)
-ema_long_values = range(20, 50, 10)
-rsi_values = range(30, 50, 10)
+def optimize_parameters(data, initial_params):
+    """
+    Optimizes trading strategy parameters.
+    """
+    result = minimize(
+        objective_function,
+        initial_params,
+        args=(data,),
+        method='Nelder-Mead'
+    )
+    return result
 
-# Run Optimization
-optimize_parameters(df, ema_short_values, ema_long_values, rsi_values)
+if __name__ == "__main__":
+    print("Loading data from C:/Users/haida/PycharmProjects/ForexBot2/data/cleaned_data.csv...")
+    data = pd.read_csv("C:/Users/haida/PycharmProjects/ForexBot2/data/cleaned_data.csv")
+    print("Data loaded successfully.")
+
+    # Initial parameters for optimization
+    initial_params = [12, 26, 14, 12, 26, 9]  # Short EMA, Long EMA, RSI period, MACD parameters
+
+    print("Optimizing parameters...")
+    result = optimize_parameters(data, initial_params)
+
+    print("Optimization complete.")
+    print("Optimized parameters:", result.x)
+    print("Optimization success:", result.success)
+    print("Optimization message:", result.message)
+
+
+
+
+
+
+
 

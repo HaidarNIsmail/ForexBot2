@@ -1,124 +1,58 @@
 import pandas as pd
-import ta
-from textblob import TextBlob
-from src.indicators.maw import calculate_maw
-from src.indicators.rtd import calculate_rtd
-from src.indicators.xmode import xmode_strategy  # Ensure this is correctly imported
-import os
-from Config.config import Config
 
-def analyze_sentiment(news_headlines):
-    try:
-        sentiments = [TextBlob(headline).sentiment.polarity for headline in news_headlines]
-        return sentiments
-    except Exception as e:
-        print(f"Error during sentiment analysis: {e}")
-        return None
 
-def calculate_technical_indicators(df, news_headlines=None):
-    try:
-        print("Starting indicator calculations...")
+def calculate_ema(column, span):
+    """
+    Calculate the Exponential Moving Average (EMA) for a given column.
 
-        # Check if required columns exist
-        required_columns = {'Open', 'High', 'Low', 'Close', 'Volume'}
-        missing_columns = required_columns.difference(df.columns)
-        if missing_columns:
-            print(f"KeyError: Missing columns in DataFrame: {', '.join(missing_columns)}")
-            for col in missing_columns:
-                df[col] = 0.0  # Adding default values for missing columns
-            print(f"Added missing columns with default values: {', '.join(missing_columns)}")
+    Args:
+        column (pd.Series): The data column to calculate EMA for (e.g., Close prices).
+        span (int): The span for the EMA calculation.
 
-        # EMA Calculation
-        print("Calculating EMAs...")
-        df['EMA_50'] = ta.trend.ema_indicator(close=df['Close'], window=50)
-        df['EMA_200'] = ta.trend.ema_indicator(close=df['Close'], window=200)
+    Returns:
+        pd.Series: The calculated EMA values.
+    """
+    return column.ewm(span=span, adjust=False).mean()
 
-        # RSI
-        print("Calculating RSI...")
-        df['RSI'] = ta.momentum.rsi(close=df['Close'], window=14)
 
-        # MACD
-        print("Calculating MACD...")
-        df['MACD'] = ta.trend.macd(close=df['Close'], window_slow=26, window_fast=12)
-        df['MACD_Signal'] = ta.trend.macd_signal(close=df['Close'], window_slow=26, window_fast=12)
-        df['MACD_Histogram'] = ta.trend.macd_diff(close=df['Close'], window_slow=26, window_fast=12)
+def calculate_rsi(column, period=14):
+    """
+    Calculate the Relative Strength Index (RSI).
 
-        # Bollinger Bands
-        print("Calculating Bollinger Bands...")
-        bb_indicator = ta.volatility.BollingerBands(close=df['Close'], window=20, window_dev=2)
-        df['BB_High'] = bb_indicator.bollinger_hband()
-        df['BB_Low'] = bb_indicator.bollinger_lband()
-        df['BB_Middle'] = bb_indicator.bollinger_mavg()
+    Args:
+        column (pd.Series): The data column to calculate RSI for (e.g., Close prices).
+        period (int): The period for the RSI calculation.
 
-        # Average True Range (ATR)
-        print("Calculating ATR...")
-        df['ATR'] = ta.volatility.average_true_range(high=df['High'], low=df['Low'], close=df['Close'], window=14)
+    Returns:
+        pd.Series: The calculated RSI values.
+    """
+    delta = column.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
 
-        # Ichimoku Cloud
-        print("Calculating Ichimoku Cloud...")
-        ichimoku = ta.trend.IchimokuIndicator(high=df['High'], low=df['Low'])
-        df['Ichimoku_Conversion'] = ichimoku.ichimoku_conversion_line()
-        df['Ichimoku_Base'] = ichimoku.ichimoku_base_line()
-        df['Ichimoku_A'] = ichimoku.ichimoku_a()
-        df['Ichimoku_B'] = ichimoku.ichimoku_b()
-        df['Chikou_Span'] = df['Close'].shift(-26)
 
-        # Stochastic RSI
-        print("Calculating Stochastic RSI...")
-        df['Stochastic_RSI'] = ta.momentum.stochrsi(close=df['Close'])
+def calculate_macd(column, fast=12, slow=26, signal=9):
+    """
+    Calculate the Moving Average Convergence Divergence (MACD).
 
-        # ADX
-        print("Calculating ADX...")
-        df['ADX'] = ta.trend.adx(high=df['High'], low=df['Low'], close=df['Close'])
+    Args:
+        column (pd.Series): The data column to calculate MACD for (e.g., Close prices).
+        fast (int): The span for the fast EMA.
+        slow (int): The span for the slow EMA.
+        signal (int): The span for the signal line.
 
-        # Calculate MAW, RTD, and X-Mode
-        print("Calculating MAW...")
-        df = calculate_maw(df)
-        print("Calculating RTD...")
-        df = calculate_rtd(df)
-        print("Calculating X-Mode...")
-        df = xmode_strategy(df)
+    Returns:
+        tuple: MACD line and Signal line as pd.Series.
+    """
+    ema_fast = column.ewm(span=fast, adjust=False).mean()
+    ema_slow = column.ewm(span=slow, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+    return macd_line, signal_line
 
-        # Sentiment (using TextBlob, if applicable)
-        if news_headlines is not None:
-            print("Analyzing sentiment...")
-            sentiments = analyze_sentiment(news_headlines)
-            if sentiments is not None:
-                df['Sentiment'] = sentiments
 
-    except Exception as e:
-        print(f"An error occurred during technical indicator calculation: {e}")
-        return None
-
-    # Drop any rows with NaN values resulting from indicator calculations
-    df.dropna(inplace=True)
-
-    return df
-
-if __name__ == "__main__":
-    # Load data
-    full_data_path = os.path.join(os.path.dirname(__file__), '..', '..', Config.DATA_PATH)
-
-    try:
-        df = pd.read_csv(full_data_path, index_col='time')
-
-        # Ensure the index is a DatetimeIndex
-        if not isinstance(df.index, pd.DatetimeIndex):
-            df.index = pd.to_datetime(df.index)
-            print("Converted 'time' column to DatetimeIndex.")
-
-        print("Calculating technical indicators...")
-        df_with_indicators = calculate_technical_indicators(df.copy())
-
-        if df_with_indicators is not None:
-            df_with_indicators.to_csv("data/data_with_indicators.csv")
-            print(f"Data with technical indicators saved to data/data_with_indicators.csv")
-        else:
-            print("Error during indicator calculations.")
-
-    except FileNotFoundError:
-        print(f"Error: Could not find the data file at: {full_data_path}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
 
 

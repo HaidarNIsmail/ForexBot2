@@ -1,25 +1,38 @@
 import pandas as pd
+from sklearn.impute import SimpleImputer
 
-# Path to the CSV file
-file_path = 'C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_indicators.csv'
+# Input and output file paths
+input_file = 'C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_indicators_final_with_index.csv'
+output_file = 'C:/Users/haida/PycharmProjects/ForexBot2/data/cleaned_data.csv'
 
-# Load the CSV file
-df = pd.read_csv(file_path)
+def clean_data():
+    print("Reading the data...")
+    try:
+        # Load the data
+        df = pd.read_csv(input_file, index_col=0)
+        print(f"Data loaded successfully. Shape: {df.shape}")
 
-# Interpolate missing values
-columns_to_interpolate = [
-    'EMA_50', 'EMA_200', 'RSI', 'MACD', 'MACD_Signal', 'MACD_Histogram',
-    'BB_High', 'BB_Low', 'BB_Middle', 'ATR', 'Ichimoku_Conversion',
-    'Ichimoku_Base', 'Ichimoku_A', 'Ichimoku_B', 'Chikou_Span',
-    'Stochastic_RSI', 'ADX'
-]
+        # Impute missing values
+        print("Handling missing values...")
+        imputer = SimpleImputer(strategy='mean')
+        numeric_columns = df.select_dtypes(include=['float64', 'int64']).columns
+        df[numeric_columns] = imputer.fit_transform(df[numeric_columns])
+        print("Missing values imputed.")
 
-for col in columns_to_interpolate:
-    df[col] = df[col].replace(0, pd.NA).interpolate(method='linear')
+        # Optional: Drop rows with extreme outliers (if needed)
+        # Define outlier thresholds
+        # threshold = 3
+        # df = df[(df - df.mean()).abs() / df.std() < threshold]
 
-# Save the cleaned data
-output_path = 'C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_indicators_cleaned.csv'
-df.to_csv(output_path, index=False)
+        # Save cleaned data
+        print(f"Saving cleaned data to {output_file}...")
+        df.to_csv(output_file)
+        print("Cleaned data saved successfully.")
 
-print(f"Cleaned data saved to: {output_path}")
+    except Exception as e:
+        print(f"Error during data cleaning: {e}")
+
+if __name__ == '__main__':
+    clean_data()
+
 
