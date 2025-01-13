@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import joblib
 
 # Signal Generation Logic
 def calculate_signals(df):
@@ -7,83 +8,88 @@ def calculate_signals(df):
     Generate Buy and Sell signals based on EMA crossovers and RSI thresholds.
     """
     # Define parameters
-    ema_short, ema_long, rsi_threshold = 5, 20, 30
+    ema_short, ema_long, rsi_threshold = 50, 200, 30
 
     # Calculate EMA
-    df['EMA_Short'] = df['Close'].ewm(span=ema_short, adjust=False).mean()
-    df['EMA_Long'] = df['Close'].ewm(span=ema_long, adjust=False).mean()
+    df['EMA_50'] = df['Close'].ewm(span=ema_short, adjust=False).mean()
+    df['EMA_200'] = df['Close'].ewm(span=ema_long, adjust=False).mean()
 
     # Generate Buy and Sell Signals
-    df['Buy_Signal'] = (df['EMA_Short'] > df['EMA_Long']) & (df['RSI'] < rsi_threshold)
-    df['Sell_Signal'] = (df['EMA_Short'] < df['EMA_Long']) & (df['RSI'] > 100 - rsi_threshold)
+    df['Buy_Signal'] = (df['EMA_50'] > df['EMA_200']) & (df['RSI'] < rsi_threshold)
+    df['Sell_Signal'] = (df['EMA_50'] < df['EMA_200']) & (df['RSI'] > 100 - rsi_threshold)
 
-    # Add Signal Persistence
-    signal_persistence = 3
-    df['Buy_Signal'] = df['Buy_Signal'].rolling(window=signal_persistence, min_periods=1).max().astype(bool)
-    df['Sell_Signal'] = df['Sell_Signal'].rolling(window=signal_persistence, min_periods=1).max().astype(bool)
-
-    # Debugging: Print Signal Counts
-    print("Buy Signal Count:", df['Buy_Signal'].sum())
-    print("Sell Signal Count:", df['Sell_Signal'].sum())
+    # Replace NaN signals with False
+    df['Buy_Signal'] = df['Buy_Signal'].fillna(False)
+    df['Sell_Signal'] = df['Sell_Signal'].fillna(False)
 
     return df
 
-# Add Stop-Loss and Take-Profit Levels
-def add_stop_loss_take_profit(df):
+# Add Stop Loss and Take Profit Levels
+def calculate_levels(df, atr_multiplier=1.5):
     """
-    Add Stop-Loss and Take-Profit levels based on ATR.
+    Calculate Stop Loss and Take Profit levels based on ATR.
     """
-    atr_multiplier = 2.0
-    df['Stop_Loss'] = df['Close'] - (df['ATR'] * atr_multiplier)
-    df['Take_Profit'] = df['Close'] + (df['ATR'] * atr_multiplier)
+    if 'ATR' not in df.columns:
+        raise ValueError("ATR column is missing. Ensure ATR is calculated before calling this function.")
+
+    df['Stop_Loss'] = df['Close'] - (atr_multiplier * df['ATR'])
+    df['Take_Profit'] = df['Close'] + (atr_multiplier * df['ATR'])
+
     return df
 
-# Visualization
-def plot_signals_and_indicators(df):
+# Integrate ML Model Predictions
+def add_ml_predictions(df, ml_model_path):
     """
-    Plot signals and key indicators for debugging.
+    Add predictions from the trained ML model to validate signals.
     """
-    # Plot EMA and Signals on Close Price
-    plt.figure(figsize=(14, 7))
-    plt.plot(df['Close'], label='Close Price', color='blue')
-    plt.plot(df['EMA_Short'], label='EMA Short', color='green')
-    plt.plot(df['EMA_Long'], label='EMA Long', color='red')
-    plt.scatter(df.index[df['Buy_Signal']], df['Close'][df['Buy_Signal']], label='Buy Signal', marker='^', color='lime', alpha=0.8)
-    plt.scatter(df.index[df['Sell_Signal']], df['Close'][df['Sell_Signal']], label='Sell Signal', marker='v', color='magenta', alpha=0.8)
-    plt.title('Price with EMA Crossovers and Signals')
-    plt.legend()
-    plt.grid()
-    plt.show()
+    # Load ML model
+    print("Loading ML model...")
+    ml_model = joblib.load(ml_model_path)
 
-    # Plot RSI
-    plt.figure(figsize=(14, 4))
-    plt.plot(df['RSI'], label='RSI', color='orange')
-    plt.axhline(30, linestyle='--', color='red', label='Oversold (30)')
-    plt.axhline(70, linestyle='--', color='green', label='Overbought (70)')
-    plt.title('RSI Over Time')
-    plt.legend()
-    plt.grid()
-    plt.show()
+    # Define features used in the model
+    features = ['EMA_50', 'EMA_200', 'RSI', 'MACD', 'ADX', 'Stochastic_RSI']
+
+    # Ensure all required features are present
+    missing_features = [feature for feature in features if feature not in df.columns]
+    if missing_features:
+        raise ValueError(f"Missing features in dataset: {missing_features}")
+
+    # Predict signals using the ML model
+    print("Generating ML-based predictions...")
+    df['ML_Prediction'] = ml_model.predict(df[features])
+
+    # Combine ML Predictions with Rule-Based Signals
+    df['Hybrid_Buy'] = df['Buy_Signal'] & (df['ML_Prediction'] == 1)
+    df['Hybrid_Sell'] = df['Sell_Signal'] & (df['ML_Prediction'] == -1)
+
+    return df
 
 # Main Script
 if __name__ == "__main__":
-    # Load data
+    # File paths
     data_path = "C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_indicators.csv"
-    output_path = "C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_signals.csv"
+    ml_model_path = "C:/Users/haida/PycharmProjects/ForexBot2/models/ml_model.pkl"
+    output_path = "C:/Users/haida/PycharmProjects/ForexBot2/data/data_with_hybrid_signals.csv"
+
+    # Load dataset
     df = pd.read_csv(data_path, index_col="time", parse_dates=True)
 
-    # Generate Signals
+    # Generate Rule-Based Signals
     df = calculate_signals(df)
 
-    # Add Stop-Loss and Take-Profit
-    df = add_stop_loss_take_profit(df)
+    # Add Stop Loss and Take Profit Levels
+    df = calculate_levels(df)
 
-    # Debugging: Plot Signals and Indicators
-    plot_signals_and_indicators(df)
+    # Add ML Predictions
+    df = add_ml_predictions(df, ml_model_path)
 
-    # Save Updated Data
+    # Save Updated Dataset
     df.to_csv(output_path)
-    print(f"Updated data with signals saved to: {output_path}")
+    print(f"Updated dataset with hybrid signals saved to: {output_path}")
+
+
+
+
 
 
 
