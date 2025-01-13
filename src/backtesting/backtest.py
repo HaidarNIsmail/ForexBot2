@@ -1,48 +1,61 @@
+import gym
 import pandas as pd
+from stable_baselines3 import PPO
+from src.forex_trading_env import ForexTradingEnv  # Adjusted path to 'src'
+
+# Load the cleaned data
+data = pd.read_csv("C:/Users/haida/PycharmProjects/ForexBot2/data/cleaned_data.csv")  # Updated path
+
+# Create the trading environment
+env = ForexTradingEnv(data)
+
+# Load the pre-trained model
+model = PPO.load("C:/Users/haida/PycharmProjects/ForexBot2/src/ppo_forex_model.zip")  # Updated path for the model
 
 
-# Example function to generate signals (you may adjust this based on your strategy)
-def generate_signals(data):
-    # Example: Create a signal column based on the Close price and EMA50
-    data['Signal'] = (data['Close'] > data['EMA_50']).astype(int)  # Buy signal when Close > EMA_50
-    return data
-
-
+# Backtesting the strategy
 def backtest_strategy(data):
-    # Add signal generation logic
-    data = generate_signals(data)
+    trade_rewards = []  # Store the rewards for each trade
+    position = None  # No position at the start
+    balance = 10000  # Initial balance
 
-    # Initialize variables for backtest
-    balance = 10000  # Initial balance (you can adjust this)
-    position = None  # No open position at the beginning
-    entry_price = 0
-    position_size = 1000  # Size of each trade (adjust as needed)
+    # Remove the 'time' column if it exists
+    if 'time' in data.columns:
+        data = data.drop(columns=['time'])
 
-    for idx, row in data.iterrows():
-        if row['Signal'] == 1 and position is None:  # Buy signal
-            position = 'Long'
-            entry_price = row['Close']
-            print(f"Buying at {entry_price} on {row['time']}")
-        elif row['Signal'] == 0 and position == 'Long':  # Sell signal for a Long position
-            balance += (row['Close'] - entry_price) * position_size
-            position = None
-            print(f"Selling at {row['Close']} on {row['time']}")
+    for i in range(len(data) - 10):  # Assuming a window size of 10 for the environment
+        current_data = data.iloc[i:i + 10]  # Get the window of data
+        action, _ = model.predict(current_data.values)  # Get action from the model (Buy, Sell, Hold)
 
-    # Final balance after the backtest
-    return balance
+        # Implement the trading logic
+        if action == 0 and position is None:  # Buy signal
+            position = current_data['Close'].iloc[-1]
+            balance -= position  # Buying the asset
+        elif action == 1 and position is not None:  # Sell signal
+            balance += current_data['Close'].iloc[-1]  # Selling the asset
+            position = None  # Exit position
+
+        # Record the trade reward (this is a placeholder; you can calculate more specific rewards)
+        trade_rewards.append(balance)
+
+    final_balance = balance if position is None else balance + current_data['Close'].iloc[
+        -1]  # Closing the position if still open
+    return final_balance, trade_rewards
 
 
-# Load data (you need to ensure the path is correct)
-data = pd.read_csv('C:/Users/haida/PycharmProjects/ForexBot2/data/cleaned_data.csv')
 
-# Show the columns in the dataset
-print("Columns in dataset:", data.columns)
+# Run the backtest
+final_balance, trade_rewards = backtest_strategy(data)
 
-# Backtest the strategy
-final_balance = backtest_strategy(data)
-
-# Print the final balance after the backtest
+# Print results
 print(f"Final balance after backtest: {final_balance}")
+
+
+
+
+
+
+
 
 
 
