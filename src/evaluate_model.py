@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from stable_baselines3 import PPO
-from forex_trading_env import ForexTradingEnv
+from forex_env import ForexTradingEnv
 from mt5_integration import fetch_data
 import MetaTrader5 as mt5
 
