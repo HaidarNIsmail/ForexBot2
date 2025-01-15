@@ -1,4 +1,4 @@
-time,Open,High,Low,Close,Volume,Spread,RealVolume
+time,open,high,low,close,tick_volume,spread,real_volume
 2023-06-02 07:00:00,1.0768,1.07686,1.0762,1.07631,1080,0,0
 2023-06-02 08:00:00,1.07631,1.07723,1.0762,1.07713,1369,0,0
 2023-06-02 09:00:00,1.07718,1.0779,1.07661,1.07708,2131,0,0
